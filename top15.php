@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -6,38 +6,52 @@ require_once 'inc/func.php';
 require_once("geoip2.phar");
 use GeoIp2\Database\Reader;
 
-$search = $_GET['search'];
-$style = $_GET['style'];
-$top = isset($_GET['top']) ? $_GET['top'] : 0;
-$player = $_GET['player'];
-$orderby = $_GET['order'];
-$db_table1 = $_GET['db_table1'];
-$db_table2 = $_GET['db_table2'];
+// Função para tratar inputs
+function sanitizeInput($input) {
+    if (is_array($input)) {
+        return array_map('sanitizeInput', $input);
+    }
+    // Remove espaços em branco desnecessários
+    $input = trim($input);
+    // Evita a injeção de HTML
+    $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
+    return $input;
+}
+
+$search = isset($_GET['search']) ? sanitizeInput($_GET['search']) : ''; 
+$style = isset($_GET['style']) ? sanitizeInput($_GET['style']) : 1; 
+$top = isset($_GET['top']) ? sanitizeInput($_GET['top']) : 0;
+$player = isset($_GET['player']) ? sanitizeInput($_GET['player']) : ''; 
+$orderby = isset($_GET['order']) ? sanitizeInput($_GET['order']) : 7;
+$db_table1 = isset($_GET['db_table1']) ? sanitizeInput($_GET['db_table1']) : 'rank_system';
+$db_table2 = isset($_GET['db_table2']) ? sanitizeInput($_GET['db_table2']) : 'weapon_kills';
 
 $top15_css = $style ? 'css/top15.css' : 'css/top15_nonsteam.css';
 
-if(empty($search)) {
-	$count = DB::run('SELECT COUNT(*) FROM '.$db_table1.'');
+if (empty($search)) {
+    $count = DB::run('SELECT COUNT(*) FROM ' . $db_table1);
 } else {
-	$placeholder = '%'.$search.'%';
-	$count = DB::run('SELECT COUNT(*) FROM '.$db_table1.' WHERE Nick LIKE ? OR IP LIKE ? OR `Steam ID` LIKE ?', [$placeholder, $placeholder, $placeholder]);
+    $placeholder = '%' . $search . '%';
+    $query = 'SELECT COUNT(*) FROM ' . $db_table1 . ' WHERE Nick LIKE ? OR IP LIKE ? OR `Steam ID` LIKE ?';
+    $params = [$placeholder, $placeholder, $placeholder];
+    $count = DB::run($query, $params);
 }
 $total = $count->fetch(PDO::FETCH_ASSOC);
 
-if($top > 0) {
-	if($top <= 15) $top = 15;
-	else if($top > $total['COUNT(*)']) $top = $total['COUNT(*)'];
-	$offset = $total['COUNT(*)'] >= 15 ? $top - 15 : 0; 
-	$page = ceil($top/15);
+if ($top > 0) {
+    if ($top <= 15) $top = 15;
+    else if ($top > $total['COUNT(*)']) $top = $total['COUNT(*)'];
+    $offset = $total['COUNT(*)'] >= 15 ? $top - 15 : 0;
+    $page = ceil($top / 15);
 }
 
 $items_per_page = 15;
 $total_items = $total['COUNT(*)'];
 $total_pages = ceil($total_items / $items_per_page);
 
-if(!$top) {
-	$page = isset($_GET['page']) ? $_GET['page'] : 1;
-	$offset = ($page - 1) * $items_per_page;
+if (!$top) {
+    $page = isset($_GET['page']) ? $_GET['page'] : 1;
+    $offset = ($page - 1) * $items_per_page;
 }
 
 $num1 = '0'; if(htmlspecialchars($orderby) == 0) $num1 = '14';
@@ -100,10 +114,13 @@ switch($orderby)
 	case 26: $order = 'Level ASC, XP ASC, Nick ASC'; $underline13 = 'style=text-decoration:underline;'; $desc13 = '▴'; break;
 }
 
-$sql = DB::run('SELECT Player FROM '.$db_table1.' WHERE Player = ?', [$player]);
+$sql = DB::run('SELECT Player FROM ' . $db_table1 . ' WHERE Player = ?', [$player]);
 $id = $sql->fetch(PDO::FETCH_ASSOC);
 
-$default_order = htmlspecialchars($_GET['default_order']);
+$default_order = isset($_GET['default_order']) ? htmlspecialchars($_GET['default_order']) : 13;
+
+
+
 
 echo '
 <!DOCTYPE html>
@@ -190,7 +207,7 @@ echo '
 					}
 				}
 
-				$user_url = ''.$main_url.'user.php?player='.$row['Player'].'&me='.$player.'&top='.$top.'&style='.$style.'&order='.$orderby.'&default_order='.htmlspecialchars($_GET['default_order']).'&show=0&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.$search.'';
+				$user_url = ''.$main_url.'user.php?player='.$row['Player'].'&me='.$player.'&top='.$top.'&style='.$style.'&order='.$orderby.'&default_order='.htmlspecialchars($default_order).'&show=0&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.$search.'';
     			$new_user_url = str_replace(' ', '%20', $user_url);
 
     			if($color_name != $default_name_color) {
