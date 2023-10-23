@@ -28,7 +28,7 @@ class DB
         }
         return self::$instance;
     }
-    
+
     public static function __callStatic($method, $args)
     {
         return call_user_func_array(array(self::instance(), $method), $args);
@@ -36,15 +36,16 @@ class DB
 
     public static function run($sql, $args = [])
     {
-            if (!$args)
-            {
-                 return self::instance()->query($sql);
-            }
+        if (empty($args))
+        {
+            return self::instance()->query($sql);
+        }
         $stmt = self::instance()->prepare($sql);
         $stmt->execute($args);
         return $stmt;
     }
 }
+
 class MyPDO extends PDO
 {
     public function run($sql, $args = NULL)
@@ -54,16 +55,31 @@ class MyPDO extends PDO
         return $stmt;
     }
 }
-function page($k_page=1){ // Выдает текущую страницу
-    $page=1;
-    if (isset($_GET['page'])){
-    if ($_GET['page']=='end')$page=intval($k_page);elseif(is_numeric($_GET['page'])) $page=intval($_GET['page']);}
-    if ($page<1)$page=1;
-    if ($page>$k_page)$page=$k_page;
+
+function page($k_page = 1){ // Retorna a página atual
+    $page = 1;
+    if (isset($_GET['page'])) {
+        if ($_GET['page'] == 'end') {
+            $page = intval($k_page);
+        } elseif (is_numeric($_GET['page'])) {
+            $page = intval($_GET['page']);
+        }
+    }
+    if ($page < 1) {
+        $page = 1;
+    }
+    if ($page > $k_page) {
+        $page = $k_page;
+    }
     return $page;
 }
-function k_page($k_post=0,$k_p_str=10){ // Высчитывает количество страниц
-    if ($k_post!=0) {$v_pages=ceil($k_post/$k_p_str);return $v_pages;}
-    else return 1;
+
+function k_page($k_post = 0, $k_p_str = 10){ // Calcula o número de páginas
+    if ($k_post != 0) {
+        $v_pages = ceil($k_post / $k_p_str);
+        return $v_pages;
+    } else {
+        return 1;
+    }
 }
 ?>
