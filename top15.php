@@ -1,57 +1,48 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+// error_reporting(E_ALL);
+// ini_set('display_errors', 1);
 
 require_once 'inc/func.php';
 require_once("geoip2.phar");
 use GeoIp2\Database\Reader;
 
-// Função para tratar inputs
-function sanitizeInput($input) {
-    if (is_array($input)) {
-        return array_map('sanitizeInput', $input);
-    }
-    // Remove espaços em branco desnecessários
-    $input = trim($input);
-    // Evita a injeção de HTML
-    $input = htmlspecialchars($input, ENT_QUOTES, 'UTF-8');
-    return $input;
+$search = isset($_GET['search']) ? $_GET['search'] : null;
+$style = isset($_GET['style']) ? $_GET['style'] : 1;
+$top = isset($_GET['top']) ? $_GET['top'] : 0;
+$player = isset($_GET['player']) ? $_GET['player'] :null;
+$orderby = isset($_GET['order']) ? $_GET['order'] : '13';
+ 
+
+$top15_css = $style ? 'css/custum.css' : 'css/top15_nonsteam.css';
+$fixedClause = '(1 = 1)';
+
+if (isValidIp($serverIp))
+{
+	$fixedClause = "ServerIp = '{$serverIp}'";
 }
 
-$search = isset($_GET['search']) ? sanitizeInput($_GET['search']) : ''; 
-$style = isset($_GET['style']) ? sanitizeInput($_GET['style']) : 1; 
-$top = isset($_GET['top']) ? sanitizeInput($_GET['top']) : 0;
-$player = isset($_GET['player']) ? sanitizeInput($_GET['player']) : ''; 
-$orderby = isset($_GET['order']) ? sanitizeInput($_GET['order']) : 7;
-$db_table1 = isset($_GET['db_table1']) ? sanitizeInput($_GET['db_table1']) : 'rank_system';
-$db_table2 = isset($_GET['db_table2']) ? sanitizeInput($_GET['db_table2']) : 'weapon_kills';
-
-$top15_css = $style ? 'css/top15.css' : 'css/top15_nonsteam.css';
-
-if (empty($search)) {
-    $count = DB::run('SELECT COUNT(*) FROM ' . $db_table1);
+if(empty($search)) {
+	$count = DB::run("SELECT COUNT(*) FROM (SELECT DISTINCT `Steam ID` FROM rank_system WHERE {$fixedClause}) as temp");
 } else {
-    $placeholder = '%' . $search . '%';
-    $query = 'SELECT COUNT(*) FROM ' . $db_table1 . ' WHERE Nick LIKE ? OR IP LIKE ? OR `Steam ID` LIKE ?';
-    $params = [$placeholder, $placeholder, $placeholder];
-    $count = DB::run($query, $params);
+	$placeholder = '%'.$search.'%';
+	$count = DB::run("SELECT COUNT(*) FROM (SELECT COUNT(*) FROM rank_system WHERE {$fixedClause} AND (Nick LIKE ? OR IP LIKE ? OR `Steam ID` LIKE ?) as temp)", [$placeholder, $placeholder, $placeholder]);
 }
 $total = $count->fetch(PDO::FETCH_ASSOC);
 
-if ($top > 0) {
-    if ($top <= 15) $top = 15;
-    else if ($top > $total['COUNT(*)']) $top = $total['COUNT(*)'];
-    $offset = $total['COUNT(*)'] >= 15 ? $top - 15 : 0;
-    $page = ceil($top / 15);
+if($top > 0) {
+	if($top <= 15) $top = 15;
+	else if($top > $total['COUNT(*)']) $top = $total['COUNT(*)'];
+	$offset = $total['COUNT(*)'] >= 15 ? $top - 15 : 0; 
+	$page = ceil($top/15);
 }
 
 $items_per_page = 15;
 $total_items = $total['COUNT(*)'];
 $total_pages = ceil($total_items / $items_per_page);
 
-if (!$top) {
-    $page = isset($_GET['page']) ? $_GET['page'] : 1;
-    $offset = ($page - 1) * $items_per_page;
+if(!$top) {
+	$page = isset($_GET['page']) ? $_GET['page'] : 1;
+	$offset = ($page - 1) * $items_per_page;
 }
 
 $num1 = '0'; if(htmlspecialchars($orderby) == 0) $num1 = '14';
@@ -85,69 +76,121 @@ $underline14 = ''; $desc14 = '';
 
 switch($orderby)
 {
-	case 0: $order = 'XP DESC, Nick ASC'; $underline1 = 'style=text-decoration:underline;'; $desc1 = '▾'; break;
+	case 0: $order = 'SUM(XP) DESC, Nick ASC'; $underline1 = 'style=text-decoration:underline;'; $desc1 = '▾'; break;
 	case 1: $order = 'Nick ASC'; $underline2 = 'style=text-decoration:underline;'; $desc2 = '▾'; break;
-	case 2: $order = 'Kills DESC, Nick ASC'; $underline3 = 'style=text-decoration:underline;'; $desc3 = '▾'; break;
-	case 3: $order = 'Assists DESC, Nick ASC'; $underline4 = 'style=text-decoration:underline;'; $desc4 = '▾'; break;
-	case 4: $order = 'Deaths DESC, Nick ASC'; $underline5 = 'style=text-decoration:underline;'; $desc5 = '▾'; break;
-	case 5: $order = '`Skill Range` DESC, Nick ASC'; $underline6 = 'style=text-decoration:underline;'; $desc6 = '▾'; break;
-	case 6: $order = 'Headshots DESC, Nick ASC'; $underline7 = 'style=text-decoration:underline;'; $desc7 = '▾'; break;
-	case 7: $order = 'Planted DESC, Nick ASC'; $underline8 = 'style=text-decoration:underline;'; $desc8 = '▾'; break;
-	case 8: $order = 'Exploded DESC, Nick ASC'; $underline9 = 'style=text-decoration:underline;'; $desc9 = '▾'; break;
-	case 9: $order = 'Defused DESC, Nick ASC'; $underline10 = 'style=text-decoration:underline;'; $desc10 = '▾'; break;
-	case 10: $order = '`Rounds Won` DESC, Nick ASC'; $underline11 = 'style=text-decoration:underline;'; $desc12 = '▾'; break;
-	case 11: $order = 'MVP DESC, Nick ASC'; $underline12 = 'style=text-decoration:underline;'; $desc11 = '▾'; break;
-	case 12: $order = 'Level DESC, XP DESC'; $underline13 = 'style=text-decoration:underline;'; $desc13 = '▾'; break;
-	case 13: $order = '(Kills - Deaths) DESC, Assists DESC, Headshots DESC, MVP DESC, `Rounds Won` DESC, Planted DESC, Exploded DESC, Defused DESC, XP DESC, Nick ASC'; break;
-	case 14: $order = 'XP ASC, Nick ASC'; $underline1 = 'style=text-decoration:underline;'; $desc1 = '▴'; break;
+	case 2: $order = 'SUM(Kills) DESC, Nick ASC'; $underline3 = 'style=text-decoration:underline;'; $desc3 = '▾'; break;
+	case 3: $order = 'SUM(Assists) DESC, Nick ASC'; $underline4 = 'style=text-decoration:underline;'; $desc4 = '▾'; break;
+	case 4: $order = 'SUM(Deaths) DESC, Nick ASC'; $underline5 = 'style=text-decoration:underline;'; $desc5 = '▾'; break;
+	case 5: $order = 'SUM(`Skill Range`) DESC, Nick ASC'; $underline6 = 'style=text-decoration:underline;'; $desc6 = '▾'; break;
+	case 6: $order = 'SUM(Headshots) DESC, Nick ASC'; $underline7 = 'style=text-decoration:underline;'; $desc7 = '▾'; break;
+	case 7: $order = 'SUM(Stolen) DESC, Nick ASC'; $underline8 = 'style=text-decoration:underline;'; $desc8 = '▾'; break;
+	case 8: $order = 'SUM(Recupered) DESC, Nick ASC'; $underline9 = 'style=text-decoration:underline;'; $desc9 = '▾'; break;
+	case 9: $order = 'SUM(Captured) DESC, Nick ASC'; $underline10 = 'style=text-decoration:underline;'; $desc10 = '▾'; break;
+	case 10: $order = 'SUM(`Rounds Won`) DESC, Nick ASC'; $underline11 = 'style=text-decoration:underline;'; $desc12 = '▾'; break;
+	case 11: $order = 'SUM(MVP) DESC, Nick ASC'; $underline12 = 'style=text-decoration:underline;'; $desc11 = '▾'; break;
+	case 12: $order = 'SUM(Level) DESC, SUM(XP) DESC'; $underline13 = 'style=text-decoration:underline;'; $desc13 = '▾'; break;
+	case 13: $order = '(SUM(Kills) - SUM(Deaths)) DESC, SUM(Assists) DESC, SUM(Headshots) DESC, SUM(MVP) DESC, SUM(`Rounds Won`) DESC, SUM(Stolen) DESC, SUM(Recupered) DESC, SUM(Captured) DESC, SUM(XP) DESC,Nick ASC'; break;
+	case 14: $order = 'SUM(XP) ASC, Nick ASC'; $underline1 = 'style=text-decoration:underline;'; $desc1 = '▴'; break;
 	case 15: $order = 'Nick DESC'; $underline2 = 'style=text-decoration:underline;'; $desc2 = '▴'; break;
-	case 16: $order = 'Kills ASC, Nick ASC'; $underline3 = 'style=text-decoration:underline;'; $desc3 = '▴'; break;
-	case 17: $order = 'Assists ASC, Nick ASC'; $underline4 = 'style=text-decoration:underline;'; $desc4 = '▴'; break;
-	case 18: $order = 'Deaths ASC, Nick ASC'; $underline5 = 'style=text-decoration:underline;'; $desc5 = '▴'; break;
-	case 19: $order = '`Skill Range` ASC, Nick ASC'; $underline6 = 'style=text-decoration:underline;'; $desc6 = '▴'; break;
-	case 20: $order = 'Headshots ASC, Nick ASC'; $underline7 = 'style=text-decoration:underline;'; $desc7 = '▴'; break;
-	case 21: $order = 'Planted ASC, Nick ASC'; $underline8 = 'style=text-decoration:underline;'; $desc8 = '▴'; break;
-	case 22: $order = 'Exploded ASC, Nick ASC'; $underline9 = 'style=text-decoration:underline;'; $desc9 = '▴'; break;
-	case 23: $order = 'Defused ASC, Nick ASC'; $underline10 = 'style=text-decoration:underline;'; $desc10 = '▴'; break;
-	case 24: $order = '`Rounds Won` ASC, Nick ASC'; $underline11 = 'style=text-decoration:underline;'; $desc12 = '▴'; break;
-	case 25: $order = 'MVP ASC, Nick ASC'; $underline12 = 'style=text-decoration:underline;'; $desc11 = '▴'; break;
-	case 26: $order = 'Level ASC, XP ASC, Nick ASC'; $underline13 = 'style=text-decoration:underline;'; $desc13 = '▴'; break;
+	case 16: $order = 'SUM(Kills) ASC, Nick ASC'; $underline3 = 'style=text-decoration:underline;'; $desc3 = '▴'; break;
+	case 17: $order = 'SUM(Assists) ASC, Nick ASC'; $underline4 = 'style=text-decoration:underline;'; $desc4 = '▴'; break;
+	case 18: $order = 'SUM(Deaths) ASC, Nick ASC'; $underline5 = 'style=text-decoration:underline;'; $desc5 = '▴'; break;
+	case 19: $order = 'SUM(`Skill Range`) ASC, Nick ASC'; $underline6 = 'style=text-decoration:underline;'; $desc6 = '▴'; break;
+	case 20: $order = 'SUM(Headshots) ASC, Nick ASC'; $underline7 = 'style=text-decoration:underline;'; $desc7 = '▴'; break;
+	case 21: $order = 'SUM(Stolen) ASC, Nick ASC'; $underline8 = 'style=text-decoration:underline;'; $desc8 = '▴'; break;
+	case 22: $order = 'SUM((Recupered) ASC, Nick ASC'; $underline9 = 'style=text-decoration:underline;'; $desc9 = '▴'; break;
+	case 23: $order = 'SUM(Captured) ASC, Nick ASC'; $underline10 = 'style=text-decoration:underline;'; $desc10 = '▴'; break;
+	case 24: $order = 'SUM(`Rounds Won`) ASC, Nick ASC'; $underline11 = 'style=text-decoration:underline;'; $desc12 = '▴'; break;
+	case 25: $order = 'SUM(MVP) ASC, Nick ASC'; $underline12 = 'style=text-decoration:underline;'; $desc11 = '▴'; break;
+	case 26: $order = 'SUM(Level) ASC, SUM(XP) ASC, Nick ASC'; $underline13 = 'style=text-decoration:underline;'; $desc13 = '▴'; break;
 }
 
-$sql = DB::run('SELECT Player FROM ' . $db_table1 . ' WHERE Player = ?', [$player]);
-$id = $sql->fetch(PDO::FETCH_ASSOC);
+if (!empty($player))
+{
+	$sql = DB::run("SELECT Player FROM rank_system WHERE {$fixedClause} AND Player = ? GROUP BY `Steam ID`", [$player]);
+	$id = $sql->fetch(PDO::FETCH_ASSOC);
+}
 
-$default_order = isset($_GET['default_order']) ? htmlspecialchars($_GET['default_order']) : 13;
-
-
+if (isset($_GET['default_order'])) {
+    $default_order = htmlspecialchars($_GET['default_order']);
+} else {
+    // Defina um valor padrão ou execute alguma outra lógica adequada quando a chave não estiver definida
+    $default_order = '13';
+}
 
 
 echo '
 <!DOCTYPE html>
 <meta charset="utf-8"><link rel="stylesheet" href='.$top15_css.' />
 <table>
-    <tr id="a">
-        <th id=top><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order=13&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'">#</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num2.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline2.'>Name'.$desc2.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num3.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline3.'>Kills'.$desc3.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num4.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline4.'>Assists'.$desc4.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num5.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline5.'>Deaths'.$desc5.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num7.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline7.'>Headshots'.$desc7.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num12.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline12.'><img border="0" src='.$main_url.'css/img/icon-star.png id=himg2></img>'.$desc11.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num11.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline11.'><img border="0" src='.$main_url.'css/img/icon-trophy.png id=himg2></img>'.$desc12.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num8.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline8.'><img border="0" src='.$main_url.'css/img/icon-c4-explosive.png id=himg></img>'.$desc8.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num9.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline9.'><img border="0" src='.$main_url.'css/img/icon-explosion.png id=himg></img>'.$desc9.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num10.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline10.'><img border="0" src='.$main_url.'css/img/icon-defuse-kit.png id=himg></img>'.$desc10.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num1.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline1.'>XP'.$desc1.'</a></th>
-        <th><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num6.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline6.'>Skill'.$desc6.'</a></th>
-        <th id="v"><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num13.'&default_order='.$default_order.'&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.htmlspecialchars($search).'" '.$underline13.'>Rank'.$desc13.'</a></th>
+    <tr>
+        <th class="score-tab-text"><a id=url href="'.$main_url.'band.php?top='.$top.'&player='.$player.'&style='.$style.'&order=13&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'">#</a></th>
+
+        <th class="score-tab-text"><a id=url href="'.$main_url.'band.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num2.'&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'" '.$underline2.'>Nome'.$desc2.'</a></th>
+
+        <th class="score-tab-text"><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num3.'&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'" '.$underline3.'>Kills'.$desc3.'<a></th>
+
+        <th class="score-tab-text"><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num4.'&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'" '.$underline4.'>Assists'.$desc4.'</a></th>
+
+        <th class="score-tab-text"><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num5.'&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'" '.$underline5.'>Deaths'.$desc5.'</a></th>
+
+		<th class="score-tab-text"><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num7.'&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'" '.$underline7.'>HS'.$desc7.'</a></th>
+
+		<th class="score-tab-text"><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num11.'&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'" '.$underline11.'><img border="0" src='.$main_url.'css/img/icon-trophy.png id=himg2></img>'.$desc12.'</a></th>
+
+        <th class="score-tab-text"><a id=url href="'.$main_url.'band.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num1.'&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'" '.$underline1.'>XP'.$desc1.'</a></th>
+
+        <th class="score-tab-text"><a id=url href="'.$main_url.'top15.php?top='.$top.'&player='.$player.'&style='.$style.'&order='.$num13.'&default_order='.$default_order."&srv={$serverIp}".'&page='.$page.'&search='.htmlspecialchars($search).'" '.$underline13.'>Rank'.$desc13.'</a></th>
    	</tr>';
-   			if(!empty($search)) {
+
+			$top15BaseQuery =
+				"SELECT
+					(SELECT ServerIp FROM rank_system b WHERE b.`Steam ID` = a.`Steam ID` AND b.`Played Time` = MAX(a.`Played Time`)) AS ServerIp,
+					Player,
+					Nick,
+					`Steam ID`,
+					IP,
+					SUM(XP) AS XP,
+					SUM(Level) AS Level,
+					SUM(Kills) AS Kills,
+					SUM(Assists) AS Assists,
+					SUM(Headshots) AS Headshots,
+					SUM(Deaths) AS Deaths,
+					SUM(Stolen) AS Stolen,
+					SUM(Recupered) AS Recupered,
+					SUM(Captured) AS Captured,
+					SUM(MVP) AS MVP,
+					SUM(`Rounds Won`) AS `Rounds Won`,
+					SUM(`Skill Range`) AS `Skill Range`,
+					Flags,
+					MAX(Online) AS Online,
+					MIN(New) AS New,
+					MAX(Steam) AS Steam,
+					Avatar
+				FROM
+					rank_system a
+				WHERE
+					{$fixedClause} %conditions%
+				GROUP BY
+					`Steam ID`
+				ORDER BY {$order}
+				LIMIT {$items_per_page}
+				OFFSET {$offset}";
+
+   			if(!empty($search))
+			{
    				$placeholder = '%'.$search.'%';
-   				$top15 = DB::run('SELECT Player, Nick, `Steam ID`, IP, XP, Level, Kills, Assists, Headshots, Deaths, Planted, Exploded, Defused, MVP, `Rounds Won`, Skill, `Skill Range`, Flags, Online, New, Steam, Avatar FROM '.$db_table1.' WHERE Nick LIKE ? OR IP LIKE ? OR `Steam ID` LIKE ? ORDER BY '.$order.' LIMIT '.$items_per_page.' OFFSET '.$offset.'', [$placeholder, $placeholder, $placeholder])->FetchAll(PDO::FETCH_ASSOC);
-   			} else {
-    			$top15 = DB::run('SELECT Player, Nick, `Steam ID`, IP, XP, Level, Kills, Assists, Headshots, Deaths, Planted, Exploded, Defused, MVP, `Rounds Won`, Skill, `Skill Range`, Flags, Online, New, Steam, Avatar FROM '.$db_table1.' ORDER BY '.$order.' LIMIT '.$items_per_page.' OFFSET '.$offset.'')->FetchAll(PDO::FETCH_ASSOC);
+				$top15Query = str_replace('%conditions%', 'AND (Nick LIKE ? OR IP LIKE ? OR `Steam ID` LIKE ?)', $top15BaseQuery);
+
+   				$top15 = DB::run($top15Query, [$placeholder, $placeholder, $placeholder])->FetchAll(PDO::FETCH_ASSOC);
+   			}
+			else
+			{
+				$top15Query = str_replace('%conditions%', '', $top15BaseQuery);
+
+    			$top15 = DB::run($top15Query)->FetchAll(PDO::FETCH_ASSOC);
     		}
+
     		$i = $offset + 1;
     		$table = false;
 
@@ -162,7 +205,7 @@ echo '
 
     			$skill_range = 0.0;
     			$hs_ratio = 0.0;
-    			$skill = $row['Skill'];
+				$skill = isset($row['Skill']) ? $row['Skill'] : null; // Verifica se a chave 'Skill' está definida
     			$rank = $row['Level'] + 1;
     			$steam = '';
     			$new = '';
@@ -174,21 +217,21 @@ echo '
     				$steam = '<img src="'.$main_url.'css/img/icon-steam.png" id="steam"></img>';
     				$avatar = '<img src="'.$row['Avatar'].'" id="avatar"></img>';
     			}
+				else {
+					$avatar = '<img src="" class="avatar"></img>';
+				}
     			if($row['New']) $new = '<img src="'.$main_url.'css/img/icon-new.png" id="new"></img>';
-    			if($row['Kills']) $hs_ratio = 100.0 * floatval($row['Headshots']) / floatval($row['Kills']);
-    			if($row['Kills'] || $row['Deaths']) $skill_range = 100.0 * (floatval($row['Kills']) / floatval($row['Kills'] + $row['Deaths']));
-    			if($table) {
-    				echo '<tr id=b>'; $table = false;
-    			} else {
-    				echo '<tr>'; $table = true;
-    			}
-    			if($id && $id['Player'] == $row['Player']) echo '<tr id=i>';
+
+				
+    			if (isset($id) && $id['Player'] == $row['Player']) {
+					echo '<tr id="player-target">';
+				}
 
     			switch($i) {
     				case 1: echo '<td id=z></td>'; break;
     				case 2: echo '<td id=w></td>'; break;
     				case 3: echo '<td id=y></td>'; break;
-    				default: echo '<td id=p>'.$i.'</td>'; break;
+    				default: echo '<td id=player-target>'.$i.'</td>'; break;
     			}
 
 				foreach ($name_colors as $n_color) {
@@ -200,34 +243,42 @@ echo '
 				    }
 				}
 
-				foreach ($skill_colors as $s_color) {
-   					if ($row['Skill'] == $s_color['skill']) {
-        				$color_skill = $s_color['color'];
-						break;
-					}
+				foreach ($name_colors as $n_color) {
+				    $flags = str_split($row['Flags']);
+				    $color_flags = str_split($n_color['flags']);
+				    if (count(array_intersect($flags, $color_flags)) == count($color_flags)) {
+				        $color_name = $n_color['color'];
+				        break;
+				    }
 				}
 
-				$user_url = ''.$main_url.'user.php?player='.$row['Player'].'&me='.$player.'&top='.$top.'&style='.$style.'&order='.$orderby.'&default_order='.htmlspecialchars($default_order).'&show=0&page='.$page.'&db_table1='.$db_table1.'&db_table2='.$db_table2.'&search='.$search.'';
-    			$new_user_url = str_replace(' ', '%20', $user_url);
+				$allowGlobalView = isValidIp($serverIp)
+					? 0
+					: 1;
+
+				$user_url = ''.$main_url.'user.php?player='.$row['Player'].'&me='.$player.'&top='.$top.'&style='.$style.'&order='.$orderby.'&default_order='.$default_order.'&show=0&page='.$page.'&search='.$search."&srv={$row['ServerIp']}&global={$allowGlobalView}";
+				$new_user_url = str_replace(' ', '%20', $user_url);
 
     			if($color_name != $default_name_color) {
     				echo '<style>.glow'.$i.' { text-shadow: 1px 1px 6px '.$color_name.'; }</style>';
     			}
 
+				$serverName = '';
+
+				if (empty($serverIp) && array_key_exists($row['ServerIp'], $servers))
+				{
+					$serverName = "<span class='server-name'>{$servers[$row['ServerIp']]}</span>";
+				}
+
     			echo '<style>.skill'.$i.' { background: '.$color_skill.'; border-color: '.$color_skill.'; }</style>';
 				echo '
-						<td id=sp><div id=o'.$row['Online'].'><div id='.$flag.'>'.$avatar.'<a href="'.$new_user_url.'"; style=color:'.$color_name.' class="glow'.$i.'">'.$row['Nick'].'</a>'.$steam.''.$new.'</div></div></td>
+						<td id=sp><div class="flags" id='.$flag.' style="background-image: url(\'./css/img/countries/'.$flag.'.png\')"><div id=o'.$row['Online'].'>'.$avatar.'<a href="'.$new_user_url.'" style="color:'.$color_name.'" class="glow'.$i.'">'.$row['Nick'].'</a>'.$steam.$serverName.'</div></div></td>
 						<td>'.$row['Kills'].'</td>
 						<td>'.$row['Assists'].'</td>
 						<td>'.$row['Deaths'].'</td>
-						<td id=hs>'.$row['Headshots'].' <a>'.number_format((float)$hs_ratio, 2, '.', '').'%</a></td>
-						<td id=s>★<a>'.$row['MVP'].'</a></td>
+						<td>'.$row['Headshots'].'</td>
 						<td>'.$row['Rounds Won'].'</td>
-						<td>'.$row['Planted'].'</td>
-						<td>'.$row['Exploded'].'</td>
-						<td>'.$row['Defused'].'</td>
 						<td>'.$row['XP'].'</td>
-						<td><table id=sk1 class=skill'.$i.'><td id="sk11">'.$skill.'<td id=sk12>'.number_format((float)$skill_range, 2, '.', '').'</td></td></table></td>
 						<td id="r'.$rank.'"></td>
 					</tr>
 				';
@@ -235,36 +286,35 @@ echo '
     		}
 
 			echo '</table><table class=attributes><td class=pagination>';
-
 			if(isset($_GET['top'])) unset($_GET['top']);
 			$link_att = http_build_query($_GET);
 			$new_link = ''.$main_url.'top15.php?'.http_build_query($_GET).'';
 
 			if ($page > 1) {
 				
-			    echo "<a href='$new_link&page=1'>First</a> ";
+			    echo "<button type='button' class='btn-page active'><a href='$new_link&page=$total_pages'><a href='$new_link&page=1'>Primeiro</a></button>";
 			}
 
 			for ($i = max(1, $page - 2); $i <= min($page + 2, $total_pages); $i++) {
 			    if ($i == $page) {
-			        echo "<strong>$i</strong> ";
+			        echo "<button class='btn-page active'><a>$i</a></button> ";
 			    } else {
-			        echo "<a href='$new_link&page=$i'>$i</a> ";
+			        echo "<button class='btn-page active'><a href='$new_link&page=$i'>$i</a></button>";
 			    }
 			}
 
 			if ($page < $total_pages) {
-			    echo "<a href='$new_link&page=$total_pages'>Last</a>";
+			    echo "<button type='button' class='btn-page active'><a href='$new_link&page=$total_pages'>Ultimo</a></button>";
 			}
 
-			echo '<td class="form-control"><form method="get">
-			<input class="search-bar" name="search" type="search" id="inputSearch" placeholder="Nick / IP / Steam ID" aria-label="Search">
+
+			echo '
+			<td class="form-control"><form method="get">
+			<input class="search-bar" name="search" type="search" id="inputSearch" placeholder="Nick/Steam ID" aria-label="Search">
 			<input type="hidden" name="player">
 			<input type="hidden" name="page" value="1">
 			<input type="hidden" name="style" value="'.$style.'">
 			<input type="hidden" name="order" value="'.$orderby.'">
 			<input type="hidden" name="default_order" value="'.$default_order.'">
-			<input type="hidden" name="db_table1" value="'.$db_table1.'">
-			<input type="hidden" name="db_table2" value="'.$db_table2.'">
-			<button class="button" id="btnSearch" type="submit" >Search</button>';
+			<button class="button" id="btnSearch" type="submit" >Buscar</button>';
         ?>
